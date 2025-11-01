@@ -1,0 +1,1225 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import httpClient from '../api/httpClient';
+import './Timetable.css';
+
+
+
+function Timetable() {
+  const [schedule, setSchedule] = useState([]);
+  const [editingSlot, setEditingSlot] = useState(null);
+  const [newSlot, setNewSlot] = useState({ day: 'Monday', time: '', subject: '', topic: '' });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeDay, setActiveDay] = useState('Monday');
+  const [notifications, setNotifications] = useState([]);
+  const [lastSaved, setLastSaved] = useState(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const { currentUser } = useAuth();
+
+
+
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  const timeSlots = [
+    '6:00 AM', '7:00 AM', '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
+    '12:00 PM', '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM',
+    '6:00 PM', '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM'
+  ];
+
+
+
+  const autoSaveTimeoutRef = useRef(null);  const autoSaveTimeoutRef = useRef(null);
+
+  const debounceTimeoutRef = useRef(null);  const debounceTimeoutRef = useRef(null);
+
+
+
+  const showNotification = useCallback((message, type = 'info') => {  const showNotification = useCallback((message, type = 'info') => {
+
+    const id = Date.now();    const id = Date.now();
+
+    setNotifications(prev => [...prev, { id, message, type }]);    setNotifications(prev => [...prev, { id, message, type }]);
+
+    setTimeout(() => {    setTimeout(() => {
+
+      setNotifications(prev => prev.filter(n => n.id !== id));      setNotifications(prev => prev.filter(n => n.id !== id));
+
+    }, 5000);    }, 5000);
+
+  }, []);  }, []);
+
+
+
+  const saveToLocalStorage = useCallback(() => {  const initializeData = useCallback(async () => {
+
+    localStorage.setItem('studyhub_timetable_backup', JSON.stringify({ schedule, timestamp: Date.now() }));    try {
+
+  }, [schedule]);      const saved = localStorage.getItem('studyhub_timetable_backup');
+
+      if (saved) {
+
+  const performAutoSave = useCallback(async () => {        try {
+
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);          const parsed = JSON.parse(saved);
+
+    try {          if (parsed.schedule && Array.isArray(parsed.schedule)) {
+
+      setSaving(true);            setSchedule(parsed.schedule);
+
+      await httpClient.post('/timetable/save', { schedule });            setHasUnsavedChanges(true);
+
+      setHasUnsavedChanges(false);            showNotification('Unsaved changes loaded from local storage', 'info');
+
+      setLastSaved(new Date());            return; // Don't fetch from server if we have local changes
+
+      showNotification('Timetable saved successfully', 'success');          }
+
+      saveToLocalStorage(); // Keep backup even after successful save        } catch (error) {
+
+      localStorage.removeItem('studyhub_timetable_backup');          console.error('Error loading from localStorage:', error);
+
+    } catch (error) {        }
+
+      console.error('Auto-save error:', error);      }
+
+      showNotification('Failed to save timetable', 'error');
+
+      saveToLocalStorage(); // Backup to localStorage on failure      // No valid local data, fetch from server
+
+    } finally {      setLoading(true);
+
+      setSaving(false);      const response = await httpClient.get('/timetable');
+
+    }      if (response.data.success) {
+
+  }, [schedule, saveToLocalStorage, showNotification]);        setSchedule(response.data.schedule);
+
+        setHasUnsavedChanges(false);
+
+  const debounceAutoSave = useCallback(() => {      } else {
+
+    if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);        // Initialize empty schedule if no data
+
+    debounceTimeoutRef.current = setTimeout(() => {        const initialSchedule = days.map(day => ({
+
+      performAutoSave();          day,
+
+    }, 2000); // 2 second debounce          slots: []
+
+  }, [performAutoSave]);        }));
+
+        setSchedule(initialSchedule);
+
+  const initializeData = useCallback(async () => {      }
+
+    try {    } catch (error) {
+
+      const saved = localStorage.getItem('studyhub_timetable_backup');      console.error('Error initializing timetable:', error);
+
+      if (saved) {      showNotification('Failed to load timetable', 'error');
+
+        try {      const initialSchedule = days.map(day => ({
+
+          const parsed = JSON.parse(saved);        day,
+
+          if (parsed.schedule && Array.isArray(parsed.schedule)) {        slots: []
+
+            setSchedule(parsed.schedule);      }));
+
+            setHasUnsavedChanges(true);      setSchedule(initialSchedule);
+
+            showNotification('Unsaved changes loaded from local storage', 'info');    } finally {
+
+            return; // Don't fetch from server if we have local changes      setLoading(false);
+
+          }    }
+
+        } catch (error) {  }, [days, showNotification]);
+
+          console.error('Error loading from localStorage:', error);
+
+        }  const loadFromLocalStorage = useCallback(() => {
+
+      }    const saved = localStorage.getItem('studyhub_timetable_backup');
+
+    if (saved) {
+
+      // No valid local data, fetch from server      try {
+
+      setLoading(true);        const parsed = JSON.parse(saved);
+
+      const response = await httpClient.get('/timetable');        if (parsed.schedule && Array.isArray(parsed.schedule)) {
+
+      if (response.data.success) {          setSchedule(parsed.schedule);
+
+        setSchedule(response.data.schedule);          setHasUnsavedChanges(true);
+
+        setHasUnsavedChanges(false);          showNotification('Unsaved changes loaded from local storage', 'info');
+
+      } else {        }
+
+        // Initialize empty schedule if no data      } catch (error) {
+
+        const initialSchedule = days.map(day => ({        console.error('Error loading from localStorage:', error);
+
+          day,      }
+
+          slots: []    }
+
+        }));  }, [showNotification]);
+
+        setSchedule(initialSchedule);
+
+      }  const saveToLocalStorage = useCallback(() => {
+
+    } catch (error) {    localStorage.setItem('studyhub_timetable_backup', JSON.stringify({ schedule, timestamp: Date.now() }));
+
+      console.error('Error initializing timetable:', error);  }, [schedule]);
+
+      showNotification('Failed to load timetable', 'error');
+
+      const initialSchedule = days.map(day => ({  const performAutoSave = useCallback(async () => {
+
+        day,    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
+        slots: []    try {
+
+      }));      setSaving(true);
+
+      setSchedule(initialSchedule);      await httpClient.post('/timetable/save', { schedule });
+
+    } finally {      setHasUnsavedChanges(false);
+
+      setLoading(false);      setLastSaved(new Date());
+
+    }      showNotification('Timetable saved successfully', 'success');
+
+  }, [days, showNotification]);      saveToLocalStorage(); // Keep backup even after successful save
+
+      localStorage.removeItem('studyhub_timetable_backup');
+
+  // Initialize data    } catch (error) {
+
+  useEffect(() => {      console.error('Auto-save error:', error);
+
+    initializeData();      showNotification('Failed to save timetable', 'error');
+
+  }, [initializeData]);      saveToLocalStorage(); // Backup to localStorage on failure
+
+    } finally {
+
+  // Handle auto-save      setSaving(false);
+
+  useEffect(() => {    }
+
+    if (hasUnsavedChanges) {  }, [schedule, saveToLocalStorage]);
+
+      debounceAutoSave();
+
+    }  const debounceAutoSave = useCallback(() => {
+
+  }, [hasUnsavedChanges, debounceAutoSave]);    if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+
+    debounceTimeoutRef.current = setTimeout(() => {
+
+  const addSlot = () => {      performAutoSave();
+
+    if (!newSlot.time || !newSlot.subject) {    }, 2000); // 2 second debounce
+
+      showNotification('Please fill in both time and subject', 'warning');  }, [performAutoSave]);
+
+      return;
+
+    }  const fetchTimetable = useCallback(async () => {
+
+    try {
+
+    const updatedSchedule = schedule.map(daySchedule => {      setLoading(true);
+
+      if (daySchedule.day === newSlot.day) {      const response = await httpClient.get('/timetable');
+
+        const slotExists = daySchedule.slots.some(slot => slot.time === newSlot.time);      if (response.data.success) {
+
+        if (slotExists) {        setSchedule(response.data.schedule);
+
+          showNotification('A slot already exists at this time. Please choose a different time.', 'warning');        setHasUnsavedChanges(false);
+
+          return daySchedule;      } else {
+
+        }        // Initialize empty schedule if no data
+
+                const initialSchedule = days.map(day => ({
+
+        return {          day,
+
+          ...daySchedule,          slots: []
+
+          slots: [...daySchedule.slots, { ...newSlot, isCompleted: false }].sort((a, b) =>         }));
+
+            timeSlots.indexOf(a.time) - timeSlots.indexOf(b.time)        setSchedule(initialSchedule);
+
+          )      }
+
+        };    } catch (error) {
+
+      }      console.error('Error fetching timetable:', error);
+
+      return daySchedule;      showNotification('Failed to fetch timetable', 'error');
+
+    });      // Initialize empty schedule on error
+
+      const initialSchedule = days.map(day => ({
+
+    setSchedule(updatedSchedule);        day,
+
+    setHasUnsavedChanges(true);        slots: []
+
+    saveToLocalStorage();      }));
+
+    setNewSlot({ day: 'Monday', time: '', subject: '', topic: '' });      setSchedule(initialSchedule);
+
+  };    } finally {
+
+      setLoading(false);
+
+  const updateSlot = (day, slotIndex, updates) => {    }
+
+    const updatedSchedule = schedule.map(daySchedule => {  }, [days]);
+
+      if (daySchedule.day === day) {
+
+        const updatedSlots = [...daySchedule.slots];  // Setup initial data and polling
+
+        updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], ...updates };  const fetchTimetable = useCallback(async () => {
+
+        return { ...daySchedule, slots: updatedSlots };    try {
+
+      }      setLoading(true);
+
+      return daySchedule;      const response = await httpClient.get('/timetable');
+
+    });      if (response.data.success) {
+
+    setSchedule(updatedSchedule);        setSchedule(response.data.schedule);
+
+    setHasUnsavedChanges(true);        setHasUnsavedChanges(false);
+
+    saveToLocalStorage();      } else {
+
+    setEditingSlot(null);        // Initialize empty schedule if no data
+
+  };        const initialSchedule = days.map(day => ({
+
+          day,
+
+  const deleteSlot = (day, slotIndex) => {          slots: []
+
+    if (!window.confirm('Are you sure you want to delete this slot?')) {        }));
+
+      return;        setSchedule(initialSchedule);
+
+    }      }
+
+    } catch (error) {
+
+    const updatedSchedule = schedule.map(daySchedule => {      console.error('Error fetching timetable:', error);
+
+      if (daySchedule.day === day) {      showNotification('Failed to fetch timetable', 'error');
+
+        const updatedSlots = daySchedule.slots.filter((_, index) => index !== slotIndex);      // Initialize empty schedule on error
+
+        return { ...daySchedule, slots: updatedSlots };      const initialSchedule = days.map(day => ({
+
+      }        day,
+
+      return daySchedule;        slots: []
+
+    });      }));
+
+    setSchedule(updatedSchedule);      setSchedule(initialSchedule);
+
+    setHasUnsavedChanges(true);    } finally {
+
+    saveToLocalStorage();      setLoading(false);
+
+  };    }
+
+  }, [days, showNotification]);
+
+  const toggleCompletion = (day, slotIndex) => {
+
+    const updatedSchedule = schedule.map(daySchedule => {  // Initialize data
+
+      if (daySchedule.day === day) {  useEffect(() => {
+
+        const updatedSlots = [...daySchedule.slots];    if (loadFromLocalStorage) {
+
+        updatedSlots[slotIndex] = {       loadFromLocalStorage();
+
+          ...updatedSlots[slotIndex],     }
+
+          isCompleted: !updatedSlots[slotIndex].isCompleted     if (fetchTimetable) {
+
+        };      fetchTimetable();
+
+        return { ...daySchedule, slots: updatedSlots };    }
+
+      }  }, [fetchTimetable, loadFromLocalStorage]);
+
+      return daySchedule;
+
+    });  // Handle auto-save
+
+    setSchedule(updatedSchedule);  useEffect(() => {
+
+    setHasUnsavedChanges(true);    if (hasUnsavedChanges && debounceAutoSave) {
+
+    saveToLocalStorage();      debounceAutoSave();
+
+  };    }
+
+  }, [hasUnsavedChanges, debounceAutoSave]);
+
+  const getDayCompletion = (daySlots) => {
+
+    if (daySlots.length === 0) return 0;  const loadFromLocalStorage = useCallback(() => {
+
+    const completed = daySlots.filter(slot => slot.isCompleted).length;    const saved = localStorage.getItem('studyhub_timetable_backup');
+
+    return Math.round((completed / daySlots.length) * 100);    if (saved) {
+
+  };      try {
+
+        const parsed = JSON.parse(saved);
+
+  const getWeeklyStats = () => {        if (parsed.schedule && Array.isArray(parsed.schedule)) {
+
+    const stats = days.map(day => {          setSchedule(parsed.schedule);
+
+      const daySchedule = schedule.find(d => d.day === day) || { slots: [] };          setHasUnsavedChanges(true);
+
+      return {          showNotification('Unsaved changes loaded from local storage', 'info');
+
+        day,        }
+
+        completion: getDayCompletion(daySchedule.slots),      } catch (error) {
+
+        totalSlots: daySchedule.slots.length,        console.error('Error loading from localStorage:', error);
+
+        completedSlots: daySchedule.slots.filter(slot => slot.isCompleted).length      }
+
+      };    }
+
+    });  }, []);
+
+
+
+    const totalWeeklySlots = stats.reduce((sum, stat) => sum + stat.totalSlots, 0);  const saveToLocalStorage = useCallback(() => {
+
+    const totalCompleted = stats.reduce((sum, stat) => sum + stat.completedSlots, 0);    localStorage.setItem('studyhub_timetable_backup', JSON.stringify({ schedule, timestamp: Date.now() }));
+
+    const weeklyCompletion = totalWeeklySlots > 0 ? Math.round((totalCompleted / totalWeeklySlots) * 100) : 0;  }, [schedule]);
+
+
+
+    return { stats, weeklyCompletion, totalWeeklySlots, totalCompleted };  const performAutoSave = useCallback(async () => {
+
+  };    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
+    try {
+
+  const weeklyStats = getWeeklyStats();      setSaving(true);
+
+      await httpClient.post('/timetable/save', { schedule });
+
+  if (loading) {      setHasUnsavedChanges(false);
+
+    return (      setLastSaved(new Date());
+
+      <div className="timetable-page">      showNotification('Timetable saved successfully', 'success');
+
+        <header className="topbar">      saveToLocalStorage(); // Keep backup even after successful save
+
+          <div className="brand">      localStorage.removeItem('studyhub_timetable_backup');
+
+            <span className="logo">📚</span>    } catch (error) {
+
+            <Link to="/" className="title">StudyHub</Link>      console.error('Auto-save error:', error);
+
+          </div>      showNotification('Failed to save timetable', 'error');
+
+          <div className="actions">      saveToLocalStorage(); // Backup to localStorage on failure
+
+            <Link to="/" className="btn btn-outline">Back to Home</Link>    } finally {
+
+          </div>      setSaving(false);
+
+        </header>    }
+
+        <div className="loading-container">  }, [schedule, saveToLocalStorage, showNotification]);
+
+          <div className="loading-spinner"></div>
+
+          <p>Loading timetable...</p>  const debounceAutoSave = useCallback(() => {
+
+        </div>    if (debounceTimeoutRef.current) clearTimeout(debounceTimeoutRef.current);
+
+      </div>    debounceTimeoutRef.current = setTimeout(() => {
+
+    );      performAutoSave();
+
+  }    }, 2000); // 2 second debounce
+
+  }, [performAutoSave]);
+
+  return (
+
+    <div className="timetable-page">  const showNotification = (message, type = 'info') => {
+
+      {/* Notifications */}    const id = Date.now();
+
+      <div className="notifications">    setNotifications(prev => [...prev, { id, message, type }]);
+
+        {notifications.map(notification => (    setTimeout(() => {
+
+          <div key={notification.id} className={`notification ${notification.type}`}>      setNotifications(prev => prev.filter(n => n.id !== id));
+
+            {notification.message}    }, 5000);
+
+          </div>  };
+
+        ))}
+
+      </div>  const saveTimetable = async () => {
+
+    setSaving(true);
+
+      <header className="topbar">    try {
+
+        <div className="brand">      const response = await httpClient.post('/timetable', { schedule });
+
+          <span className="logo">📚</span>      const data = response.data;
+
+          <Link to="/" className="title">StudyHub</Link>      if (data.success) {
+
+        </div>        setLastSaved(new Date());
+
+        <nav className="nav">        setHasUnsavedChanges(false);
+
+          <Link to="/notes" className="nav-link">Notes</Link>        localStorage.removeItem('studyhub_timetable_backup');
+
+          <Link to="/courses" className="nav-link">Courses</Link>        showNotification('Timetable saved successfully!', 'success');
+
+          <Link to="/timetable" className="nav-link active">Timetable</Link>      } else {
+
+          <a href="https://drive.google.com/drive/folders/1IWg3sxnK0abUSWn3UUJckaoSMRSS19UD"         throw new Error('Save failed');
+
+             target="_blank"       }
+
+             rel="noopener noreferrer"     } catch (error) {
+
+             className="nav-link">      console.error('Error saving timetable:', error);
+
+            PYQs      if (error.response?.status === 409) {
+
+          </a>        showNotification('Timetable was modified elsewhere. Please refresh and try again.', 'error');
+
+          <Link to="/ask-doubt" className="nav-link">AskDoubt</Link>        fetchTimetable(); // Conflict resolution
+
+        </nav>      } else {
+
+        <div className="actions">        showNotification('Error saving timetable. Please try again.', 'error');
+
+          <div className="user-menu">      }
+
+            <span className="user-greeting">Hello, {currentUser?.name}</span>    } finally {
+
+            <Link to="/" className="btn btn-outline">Back to Home</Link>      setSaving(false);
+
+          </div>    }
+
+        </div>  };
+
+      </header>
+
+  const addSlot = () => {
+
+      <div className="timetable-container">    if (!newSlot.time || !newSlot.subject) {
+
+        <div className="timetable-header">      showNotification('Please fill in both time and subject', 'warning');
+
+          <h1>Study Timetable</h1>      return;
+
+          <p>Plan your study schedule and track your progress</p>    }
+
+          {lastSaved && (
+
+            <div className="last-saved">Last saved: {lastSaved.toLocaleString()}</div>    const updatedSchedule = schedule.map(daySchedule => {
+
+          )}      if (daySchedule.day === newSlot.day) {
+
+          {hasUnsavedChanges && (        const slotExists = daySchedule.slots.some(slot => slot.time === newSlot.time);
+
+            <div className="unsaved-changes">You have unsaved changes</div>        if (slotExists) {
+
+          )}          showNotification('A slot already exists at this time. Please choose a different time.', 'warning');
+
+        </div>          return daySchedule;
+
+        }
+
+        {/* Weekly Overview */}        
+
+        <div className="weekly-overview">        return {
+
+          <div className="overview-header">          ...daySchedule,
+
+            <h2>Weekly Overview</h2>          slots: [...daySchedule.slots, { ...newSlot, isCompleted: false }].sort((a, b) => 
+
+            <div className="weekly-stats">            timeSlots.indexOf(a.time) - timeSlots.indexOf(b.time)
+
+              <div className="stat-card">          )
+
+                <div className="stat-value">{weeklyStats.weeklyCompletion}%</div>        };
+
+                <div className="stat-label">Weekly Completion</div>      }
+
+              </div>      return daySchedule;
+
+              <div className="stat-card">    });
+
+                <div className="stat-value">{weeklyStats.totalCompleted}/{weeklyStats.totalWeeklySlots}</div>
+
+                <div className="stat-label">Sessions Completed</div>    setSchedule(updatedSchedule);
+
+              </div>    setHasUnsavedChanges(true);
+
+            </div>    saveToLocalStorage();
+
+          </div>    setNewSlot({ day: 'Monday', time: '', subject: '', topic: '' });
+
+              // If not in mock mode, try to persist immediately
+
+          <div className="days-navigation">    const isMock = process.env.REACT_APP_ADMIN_MOCK === 'true' || (localStorage.getItem('admin_token') || '').startsWith('dummy');
+
+            {days.map(day => {    if (!isMock) {
+
+              const dayStats = weeklyStats.stats.find(stat => stat.day === day);      // attempt to save immediately; don't block the UI
+
+              return (      saveTimetable().catch(err => {
+
+                <button        // errors are handled inside saveTimetable
+
+                  key={day}        console.error('Immediate save failed:', err);
+
+                  className={`day-tab ${activeDay === day ? 'active' : ''}`}      });
+
+                  onClick={() => setActiveDay(day)}    }
+
+                >  };
+
+                  <span className="day-name">{day.substring(0, 3)}</span>
+
+                  <div className="completion-badge">  const updateSlot = (day, slotIndex, updates) => {
+
+                    {dayStats.completion}%    const updatedSchedule = schedule.map(daySchedule => {
+
+                  </div>      if (daySchedule.day === day) {
+
+                </button>        const updatedSlots = [...daySchedule.slots];
+
+              );        updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], ...updates };
+
+            })}        return { ...daySchedule, slots: updatedSlots };
+
+          </div>      }
+
+        </div>      return daySchedule;
+
+    });
+
+        <div className="timetable-content">    setSchedule(updatedSchedule);
+
+          {/* Add New Slot Form */}    setHasUnsavedChanges(true);
+
+          <div className="add-slot-form">    saveToLocalStorage();
+
+            <h3>Add New Study Session</h3>    setEditingSlot(null);
+
+            <div className="form-grid">  };
+
+              <div className="form-group">
+
+                <label>Day</label>  const deleteSlot = (day, slotIndex) => {
+
+                <select     if (!window.confirm('Are you sure you want to delete this slot?')) {
+
+                  value={newSlot.day}       return;
+
+                  onChange={(e) => setNewSlot({...newSlot, day: e.target.value})}    }
+
+                >
+
+                  {days.map(day => (    const updatedSchedule = schedule.map(daySchedule => {
+
+                    <option key={day} value={day}>{day}</option>      if (daySchedule.day === day) {
+
+                  ))}        const updatedSlots = daySchedule.slots.filter((_, index) => index !== slotIndex);
+
+                </select>        return { ...daySchedule, slots: updatedSlots };
+
+              </div>      }
+
+                    return daySchedule;
+
+              <div className="form-group">    });
+
+                <label>Time</label>    setSchedule(updatedSchedule);
+
+                <select     setHasUnsavedChanges(true);
+
+                  value={newSlot.time}     saveToLocalStorage();
+
+                  onChange={(e) => setNewSlot({...newSlot, time: e.target.value})}  };
+
+                >
+
+                  <option value="">Select Time</option>  const toggleCompletion = (day, slotIndex) => {
+
+                  {timeSlots.map(time => (    const updatedSchedule = schedule.map(daySchedule => {
+
+                    <option key={time} value={time}>{time}</option>      if (daySchedule.day === day) {
+
+                  ))}        const updatedSlots = [...daySchedule.slots];
+
+                </select>        updatedSlots[slotIndex] = { 
+
+              </div>          ...updatedSlots[slotIndex], 
+
+                        isCompleted: !updatedSlots[slotIndex].isCompleted 
+
+              <div className="form-group">        };
+
+                <label>Subject *</label>        return { ...daySchedule, slots: updatedSlots };
+
+                <input      }
+
+                  type="text"      return daySchedule;
+
+                  placeholder="e.g., Mathematics"    });
+
+                  value={newSlot.subject}    setSchedule(updatedSchedule);
+
+                  onChange={(e) => setNewSlot({...newSlot, subject: e.target.value})}    setHasUnsavedChanges(true);
+
+                />    saveToLocalStorage();
+
+              </div>  };
+
+              
+
+              <div className="form-group">  const getDayCompletion = (daySlots) => {
+
+                <label>Topic (Optional)</label>    if (daySlots.length === 0) return 0;
+
+                <input    const completed = daySlots.filter(slot => slot.isCompleted).length;
+
+                  type="text"    return Math.round((completed / daySlots.length) * 100);
+
+                  placeholder="e.g., Algebra"  };
+
+                  value={newSlot.topic}
+
+                  onChange={(e) => setNewSlot({...newSlot, topic: e.target.value})}  const getWeeklyStats = () => {
+
+                />    const stats = days.map(day => {
+
+              </div>      const daySchedule = schedule.find(d => d.day === day) || { slots: [] };
+
+                    return {
+
+              <div className="form-group">        day,
+
+                <button className="btn btn-primary" onClick={addSlot}>        completion: getDayCompletion(daySchedule.slots),
+
+                  Add Session        totalSlots: daySchedule.slots.length,
+
+                </button>        completedSlots: daySchedule.slots.filter(slot => slot.isCompleted).length
+
+              </div>      };
+
+            </div>    });
+
+          </div>
+
+    const totalWeeklySlots = stats.reduce((sum, stat) => sum + stat.totalSlots, 0);
+
+          {/* Day Schedule */}    const totalCompleted = stats.reduce((sum, stat) => sum + stat.completedSlots, 0);
+
+          <div className="day-schedule">    const weeklyCompletion = totalWeeklySlots > 0 ? Math.round((totalCompleted / totalWeeklySlots) * 100) : 0;
+
+            <div className="day-header">
+
+              <h3>{activeDay} Schedule</h3>    return { stats, weeklyCompletion, totalWeeklySlots, totalCompleted };
+
+              <div className="day-progress">  };
+
+                <div className="progress-text">
+
+                  {getDayCompletion(schedule.find(d => d.day === activeDay)?.slots || [])}% Complete  const weeklyStats = getWeeklyStats();
+
+                </div>
+
+                <div className="progress-bar">  if (loading) {
+
+                  <div     return (
+
+                    className="progress-fill"      <div className="timetable-page">
+
+                    style={{ width: `${getDayCompletion(schedule.find(d => d.day === activeDay)?.slots || [])}%` }}        <header className="topbar">
+
+                  ></div>          <div className="brand">
+
+                </div>            <span className="logo">📚</span>
+
+              </div>            <Link to="/" className="title">StudyHub</Link>
+
+            </div>          </div>
+
+          <div className="actions">
+
+            <div className="schedule-slots">            <Link to="/" className="btn btn-outline">Back to Home</Link>
+
+              {timeSlots.map(time => {          </div>
+
+                const activeDaySchedule = schedule.find(d => d.day === activeDay);        </header>
+
+                const slot = activeDaySchedule?.slots.find(s => s.time === time);        <div className="loading-container">
+
+                          <div className="loading-spinner"></div>
+
+                return (          <p>Loading timetable...</p>
+
+                  <div key={time} className="schedule-slot">        </div>
+
+                    <div className="time-label">{time}</div>      </div>
+
+                        );
+
+                    {slot ? (  }
+
+                      <div className={`slot-card ${slot.isCompleted ? 'completed' : ''} ${
+
+                        editingSlot && editingSlot.day === activeDay && editingSlot.time === time ? 'editing' : ''  return (
+
+                      }`}>    <div className="timetable-page">
+
+                        {editingSlot && editingSlot.day === activeDay && editingSlot.time === time ? (      {/* Notifications */}
+
+                          <div className="slot-edit">      <div className="notifications">
+
+                            <input        {notifications.map(notification => (
+
+                              type="text"          <div key={notification.id} className={`notification ${notification.type}`}>
+
+                              value={slot.subject}            {notification.message}
+
+                              onChange={(e) => updateSlot(activeDay, activeDaySchedule.slots.indexOf(slot), { subject: e.target.value })}          </div>
+
+                              placeholder="Subject"        ))}
+
+                            />      </div>
+
+                            <input
+
+                              type="text"      <header className="topbar">
+
+                              value={slot.topic}        <div className="brand">
+
+                              onChange={(e) => updateSlot(activeDay, activeDaySchedule.slots.indexOf(slot), { topic: e.target.value })}          <span className="logo">📚</span>
+
+                              placeholder="Topic"          <Link to="/" className="title">StudyHub</Link>
+
+                            />        </div>
+
+                            <button         <nav className="nav">
+
+                              className="btn btn-small"          <Link to="/notes" className="nav-link">Notes</Link>
+
+                              onClick={() => setEditingSlot(null)}          <Link to="/courses" className="nav-link">Courses</Link>
+
+                            >          <Link to="/timetable" className="nav-link">Timetable</Link>
+
+                              Save          <a href="https://drive.google.com/drive/folders/1IWg3sxnK0abUSWn3UUJckaoSMRSS19UD" 
+
+                            </button>             target="_blank" 
+
+                          </div>             rel="noopener noreferrer" 
+
+                        ) : (             className="nav-link">
+
+                          <>            PYQs
+
+                            <div className="slot-info">          </a>
+
+                              <div className="slot-subject">{slot.subject}</div>          <Link to="/ask-doubt" className="nav-link">AskDoubt</Link>
+
+                              {slot.topic && <div className="slot-topic">{slot.topic}</div>}        </nav>
+
+                            </div>        <div className="actions">
+
+                            <div className="slot-actions">          <div className="user-menu">
+
+                              <button             <span className="user-greeting">Hello, {currentUser?.name}</span>
+
+                                className={`complete-btn ${slot.isCompleted ? 'completed' : ''}`}            <Link to="/" className="btn btn-outline">Back to Home</Link>
+
+                                onClick={() => toggleCompletion(activeDay, activeDaySchedule.slots.indexOf(slot))}          </div>
+
+                                title={slot.isCompleted ? 'Mark as incomplete' : 'Mark as complete'}        </div>
+
+                              >      </header>
+
+                                {slot.isCompleted ? '✅' : '⚪'}
+
+                              </button>      <div className="timetable-container">
+
+                              <button         <div className="timetable-header">
+
+                                className="edit-btn"          <h1>Study Timetable</h1>
+
+                                onClick={() => setEditingSlot({ day: activeDay, time: slot.time })}          <p>Plan your study schedule and track your progress</p>
+
+                                title="Edit session"          {lastSaved && (
+
+                              >            <div className="last-saved">Last saved: {lastSaved.toLocaleString()}</div>
+
+                                ✏️          )}
+
+                              </button>          {hasUnsavedChanges && (
+
+                              <button             <div className="unsaved-changes">You have unsaved changes</div>
+
+                                className="delete-btn"          )}
+
+                                onClick={() => deleteSlot(activeDay, activeDaySchedule.slots.indexOf(slot))}        </div>
+
+                                title="Delete session"
+
+                              >        {/* Weekly Overview */}
+
+                                🗑️        <div className="weekly-overview">
+
+                              </button>          <div className="overview-header">
+
+                            </div>            <h2>Weekly Overview</h2>
+
+                          </>            <div className="weekly-stats">
+
+                        )}              <div className="stat-card">
+
+                      </div>                <div className="stat-value">{weeklyStats.weeklyCompletion}%</div>
+
+                    ) : (                <div className="stat-label">Weekly Completion</div>
+
+                      <div className="slot-empty">              </div>
+
+                        <span>No session scheduled</span>              <div className="stat-card">
+
+                        <button                 <div className="stat-value">{weeklyStats.totalCompleted}/{weeklyStats.totalWeeklySlots}</div>
+
+                          className="btn btn-outline btn-small"                <div className="stat-label">Sessions Completed</div>
+
+                          onClick={() => {              </div>
+
+                            setNewSlot({            </div>
+
+                              day: activeDay,          </div>
+
+                              time: time,          
+
+                              subject: '',          <div className="days-navigation">
+
+                              topic: ''            {days.map(day => {
+
+                            });              const dayStats = weeklyStats.stats.find(stat => stat.day === day);
+
+                          }}              return (
+
+                        >                <button
+
+                          Add Session                  key={day}
+
+                        </button>                  className={`day-tab ${activeDay === day ? 'active' : ''}`}
+
+                      </div>                  onClick={() => setActiveDay(day)}
+
+                    )}                >
+
+                  </div>                  <span className="day-name">{day.substring(0, 3)}</span>
+
+                );                  <div className="completion-badge">
+
+              })}                    {dayStats.completion}%
+
+            </div>                  </div>
+
+          </div>                </button>
+
+        </div>              );
+
+            })}
+
+        {/* Save Button */}          </div>
+
+        <div className="timetable-actions">        </div>
+
+          <button 
+
+            className="btn btn-accent save-btn"        <div className="timetable-content">
+
+            onClick={performAutoSave}          {/* Add New Slot Form */}
+
+            disabled={saving || !hasUnsavedChanges}          <div className="add-slot-form">
+
+          >            <h3>Add New Study Session</h3>
+
+            {saving ? 'Saving...' : 'Save Timetable'}            <div className="form-grid">
+
+          </button>              <div className="form-group">
+
+        </div>                <label>Day</label>
+
+                <select 
+
+        {/* Weekly Progress */}                  value={newSlot.day} 
+
+        <div className="weekly-progress">                  onChange={(e) => setNewSlot({...newSlot, day: e.target.value})}
+
+          <h3>Daily Progress</h3>                >
+
+          <div className="progress-grid">                  {days.map(day => (
+
+            {weeklyStats.stats.map(stat => (                    <option key={day} value={day}>{day}</option>
+
+              <div key={stat.day} className="progress-item">                  ))}
+
+                <div className="progress-day">{stat.day}</div>                </select>
+
+                <div className="progress-details">              </div>
+
+                  <div className="progress-bar-horizontal">              
+
+                    <div               <div className="form-group">
+
+                      className="progress-fill"                <label>Time</label>
+
+                      style={{ width: `${stat.completion}%` }}                <select 
+
+                    ></div>                  value={newSlot.time} 
+
+                  </div>                  onChange={(e) => setNewSlot({...newSlot, time: e.target.value})}
+
+                  <div className="progress-numbers">                >
+
+                    <span className="completion">{stat.completion}%</span>                  <option value="">Select Time</option>
+
+                    <span className="sessions">({stat.completedSlots}/{stat.totalSlots})</span>                  {timeSlots.map(time => (
+
+                  </div>                    <option key={time} value={time}>{time}</option>
+
+                </div>                  ))}
+
+              </div>                </select>
+
+            ))}              </div>
+
+          </div>              
+
+        </div>              <div className="form-group">
+
+      </div>                <label>Subject *</label>
+
+    </div>                <input
+
+  );                  type="text"
+
+}                  placeholder="e.g., Mathematics"
+
+                  value={newSlot.subject}
+
+export default Timetable;                  onChange={(e) => setNewSlot({...newSlot, subject: e.target.value})}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>Topic (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Algebra"
+                  value={newSlot.topic}
+                  onChange={(e) => setNewSlot({...newSlot, topic: e.target.value})}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>&nbsp;</label>
+                <button className="btn btn-primary" onClick={addSlot}>
+                  Add Session
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Day Schedule */}
+          <div className="day-schedule">
+            <div className="day-header">
+              <h3>{activeDay} Schedule</h3>
+              <div className="day-progress">
+                <div className="progress-text">
+                  {getDayCompletion(schedule.find(d => d.day === activeDay)?.slots || [])}% Complete
+                </div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill"
+                    style={{ width: `${getDayCompletion(schedule.find(d => d.day === activeDay)?.slots || [])}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="schedule-slots">
+              {timeSlots.map(time => {
+                const activeDaySchedule = schedule.find(d => d.day === activeDay);
+                const slot = activeDaySchedule?.slots.find(s => s.time === time);
+                
+                return (
+                  <div key={time} className="schedule-slot">
+                    <div className="time-label">{time}</div>
+                    
+                    {slot ? (
+                      <div className={`slot-card ${slot.isCompleted ? 'completed' : ''} ${
+                        editingSlot && editingSlot.day === activeDay && editingSlot.time === time ? 'editing' : ''
+                      }`}>
+                        {editingSlot && editingSlot.day === activeDay && editingSlot.time === time ? (
+                          <div className="slot-edit">
+                            <input
+                              type="text"
+                              value={slot.subject}
+                              onChange={(e) => updateSlot(activeDay, activeDaySchedule.slots.indexOf(slot), { subject: e.target.value })}
+                              placeholder="Subject"
+                            />
+                            <input
+                              type="text"
+                              value={slot.topic}
+                              onChange={(e) => updateSlot(activeDay, activeDaySchedule.slots.indexOf(slot), { topic: e.target.value })}
+                              placeholder="Topic"
+                            />
+                            <button 
+                              className="btn btn-small"
+                              onClick={() => setEditingSlot(null)}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="slot-info">
+                              <div className="slot-subject">{slot.subject}</div>
+                              {slot.topic && <div className="slot-topic">{slot.topic}</div>}
+                            </div>
+                            <div className="slot-actions">
+                              <button 
+                                className={`complete-btn ${slot.isCompleted ? 'completed' : ''}`}
+                                onClick={() => toggleCompletion(activeDay, activeDaySchedule.slots.indexOf(slot))}
+                                title={slot.isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+                              >
+                                {slot.isCompleted ? '✅' : '⚪'}
+                              </button>
+                              <button 
+                                className="edit-btn"
+                                onClick={() => setEditingSlot({ day: activeDay, time: slot.time })}
+                                title="Edit session"
+                              >
+                                ✏️
+                              </button>
+                              <button 
+                                className="delete-btn"
+                                onClick={() => deleteSlot(activeDay, activeDaySchedule.slots.indexOf(slot))}
+                                title="Delete session"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="slot-empty">
+                        <span>No session scheduled</span>
+                        <button 
+                          className="btn btn-outline btn-small"
+                          onClick={() => {
+                            setNewSlot({
+                              day: activeDay,
+                              time: time,
+                              subject: '',
+                              topic: ''
+                            });
+                          }}
+                        >
+                          Add Session
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Save Button */}
+        <div className="timetable-actions">
+          <button 
+            className="btn btn-accent save-btn"
+            onClick={saveTimetable}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save Timetable'}
+          </button>
+        </div>
+
+        {/* Weekly Progress */}
+        <div className="weekly-progress">
+          <h3>Daily Progress</h3>
+          <div className="progress-grid">
+            {weeklyStats.stats.map(stat => (
+              <div key={stat.day} className="progress-item">
+                <div className="progress-day">{stat.day}</div>
+                <div className="progress-details">
+                  <div className="progress-bar-horizontal">
+                    <div 
+                      className="progress-fill"
+                      style={{ width: `${stat.completion}%` }}
+                    ></div>
+                  </div>
+                  <div className="progress-numbers">
+                    <span className="completion">{stat.completion}%</span>
+                    <span className="sessions">({stat.completedSlots}/{stat.totalSlots})</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Timetable;

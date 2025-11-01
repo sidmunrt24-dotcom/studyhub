@@ -1,0 +1,25 @@
+# Render Procfile for StudyHub Backend
+# This file tells Render how to start the Node.js application
+
+# Required Environment Variables (set in Render dashboard):
+# - MONGODB_URI: MongoDB connection string (e.g., mongodb+srv://user:pass@cluster.mongodb.net/studyhub)
+# - JWT_SECRET: Strong secret for JWT signing (generate with: openssl rand -base64 32)
+# - ALLOWED_ORIGINS: Comma-separated list of allowed frontend URLs (e.g., https://your-app.vercel.app,https://preview.vercel.app)
+# - NODE_ENV: Set to 'production' for production deployment
+# - PORT: Optional, Render assigns automatically (usually 10000)
+
+# Build Command: None needed (Render detects Node.js and runs npm install automatically)
+
+# Health Check Endpoint: /api/health
+# Configure this in Render dashboard under "Health Check Path"
+
+# Recommended Instance Type: 
+# - Starter (free tier) for development/testing
+# - Standard-1 ($7/month) for production with low traffic
+# - Scale up to Standard-2+ as traffic grows
+
+# Scaling Settings:
+# - Min instances: 1 (for always-on)
+# - Max instances: 1-5 depending on traffic (start with 1)
+
+web: node server.js

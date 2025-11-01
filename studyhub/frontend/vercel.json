@@ -1,0 +1,49 @@
+// Vercel Configuration for StudyHub Frontend
+//
+// Required Environment Variables (set in Vercel Dashboard under Project Settings > Environment Variables):
+// - REACT_APP_API_URL: Backend API URL
+//   - Production: https://your-app.onrender.com/api (replace with your Render backend URL)
+//   - Preview Deployments: Inherits from production unless overridden (e.g., for staging: https://staging-backend.onrender.com/api)
+//   - Local Development: http://localhost:5000/api
+// - REACT_APP_NAME: Application name (e.g., StudyHub) - used for branding
+// - REACT_APP_SHOW_DEMO: Optional, set to 'true' to enable demo features (default: false)
+//
+// Deployment Notes:
+// - Preview deployments (from branches) inherit environment variables from production unless explicitly set.
+// - To test with a staging backend, override REACT_APP_API_URL in preview deployment settings.
+// - Build-time variables: None required, but ensure REACT_APP_* variables are set for the build process.
+// - Security: These are public variables embedded in the build; never store secrets here.
+//
+// Build Optimization:
+// - Uses 'npm ci' for faster, reproducible installs in production.
+//
+// Security Headers:
+// - X-Frame-Options: Prevents clickjacking by denying iframe embedding.
+// - X-Content-Type-Options: Prevents MIME type sniffing.
+// - Content-Security-Policy: Restricts resource loading to enhance security (adjust as needed for external scripts/styles).
+// - Referrer-Policy: Controls referrer information sent with requests for privacy.
+//
+// Rewrites:
+// - SPA Routing: Rewrites all routes to index.html for client-side routing (no additional redirects needed).
+
+{
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "framework": "create-react-app",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ],
+  "regions": ["iad1"]
+}
