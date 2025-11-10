@@ -73,11 +73,15 @@ mongoose.connect(process.env.MONGODB_URI)
     const port = process.env.PORT || 5000;
 
     const server = app.listen(port, () => {
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://studyhub-yaib.onrender.com' 
+        : `http://localhost:${port}`;
+      
       console.log(`\n✅ Using configured port ${port}`);
       console.log(`🚀 StudyHub Backend Server Started!`);
       console.log(`📍 Port: ${port}`);
-      console.log(`🌐 API: http://localhost:${port}/api`);
-      console.log(`❤️  Health: http://localhost:${port}/api/health`);
+      console.log(`🌐 API: ${baseUrl}/api`);
+      console.log(`❤️  Health: ${baseUrl}/api/health`);
       console.log(`⏰ Started at: ${new Date().toLocaleString()}`);
     });
 
@@ -476,5 +480,3 @@ app.use((err, req, res, next) => {
     message: 'Something went wrong!'
   });
 });
-
-// Server is started after successful MongoDB connection above
